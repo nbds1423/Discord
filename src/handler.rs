@@ -95,69 +95,58 @@ impl EventHandler for Handler {
 
             let member = guild.member(&ctx.http, interaction.user.id).await.unwrap();
 
-            add_role(RoleHandler {
+            RoleHandler {
                 user_has_role,
                 interaction,
                 ctx,
                 member,
                 role_id,
-            })
+            }
+            .add_role()
             .await;
         }
     }
 }
 
-async fn add_role<'a>(handler: RoleHandler<'a>) {
-    
-    let RoleHandler {
-        user_has_role,
-        interaction,
-        ctx,
-        member,
-        role_id,
-    } = handler;
+impl<'a> RoleHandler<'a> {
+    async fn add_role(&self) {
+        match &self.user_has_role {
+            Ok(true) => {
+                self.response("Cargo removido!").await;
+                self.set_role(false).await;
+            }
+            Ok(false) => {
+                self.response("Cargo Adicionado!").await;
+                self.set_role(true).await;
+            }
+            Err(e) => {
+                println!("{:?}", e);
+                self.response("Ocorreu um erro ao adicionar o cargo.").await;
+            }
+        };
+    }
 
-    match user_has_role {
-        Ok(true) => {
-            response(interaction, ctx.clone(), "Cargo removido!").await;
-            set_role(false, member, ctx, role_id).await;
-        }
-        Ok(false) => {
-            response(interaction, ctx.clone(), "Cargo Adicionado!").await;
-            set_role(true, member, ctx, role_id).await;
-        }
-        Err(e) => {
-            println!("{:?}", e);
-            response(
-                interaction,
-                ctx.clone(),
-                "Ocorreu um erro ao adicionar o cargo.",
+    async fn response(&self, message: &str) {
+        self.interaction
+            .create_response(
+                &self.ctx.http,
+                CreateInteractionResponse::Message(
+                    CreateInteractionResponseMessage::new()
+                        .content(message)
+                        .ephemeral(true),
+                ),
             )
-            .await;
-        }
-    };
-}
+            .await
+            .expect("[Role (Message)] -> ");
+    }
 
-async fn response(interaction: ComponentInteraction, ctx: Context, message: &str) {
-    interaction
-        .create_response(
-            &ctx.http,
-            CreateInteractionResponse::Message(
-                CreateInteractionResponseMessage::new()
-                    .content(message)
-                    .ephemeral(true),
-            ),
-        )
-        .await
-        .expect("[Role (Message)] -> ");
-}
+    async fn set_role(&self, check: bool) {
+        let result = if check {
+            self.member.add_role(&self.ctx.http, self.role_id).await
+        } else {
+            self.member.remove_role(&self.ctx.http, self.role_id).await
+        };
 
-async fn set_role(check: bool, member: Member, ctx: Context, role_id: &RoleId) {
-    let result = if check {
-        member.add_role(&ctx.http, role_id).await
-    } else {
-        member.remove_role(&ctx.http, role_id).await
-    };
-
-    result.expect("[Role (Set)] ->");
+        result.expect("[Role (Set)] ->");
+    }
 }
